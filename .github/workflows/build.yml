@@ -1,0 +1,54 @@
+name: Build LineageOS 22 for sapphire
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - name: Установка зависимостей
+        run: |
+          sudo apt update
+          sudo apt install -y openjdk-17-jdk git bc bison flex build-essential \
+            curl zip unzip repo python3 python3-pip libncurses5 libncurses5-dev \
+            libssl-dev ccache libtinfo5 libxml2-utils zlib1g-dev
+
+      - name: Подготовка swap
+        run: |
+          sudo fallocate -l 10G /swapfile || true
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile || true
+          sudo swapon /swapfile || true
+
+      - name: Инициализация репо
+        run: |
+          mkdir -p ~/lineage
+          cd ~/lineage
+          repo init -u https://github.com/LineageOS/android.git -b lineage-22
+          repo sync -j2 --force-sync
+
+      - name: Клонирование device/vendor/kernel
+        run: |
+          cd ~/lineage
+          git clone https://github.com/TheMuppets/proprietary_vendor_xiaomi_sapphire.git -b lineage-22 vendor/xiaomi/sapphire
+          git clone https://github.com/LineageOS/android_device_xiaomi_sapphire.git -b lineage-22 device/xiaomi/sapphire
+          git clone https://github.com/LineageOS/android_kernel_xiaomi_sdm685.git -b lineage-22 kernel/xiaomi/sdm685
+
+      - name: Настройка окружения
+        run: |
+          cd ~/lineage
+          . build/envsetup.sh
+          lunch lineage_sapphire-userdebug
+
+      - name: Сборка LineageOS
+        run: |
+          cd ~/lineage
+          mka bacon -j2
+
+      - name: Загрузка артефактов
+        uses: actions/upload-artifact@v4
+        with:
+          name: LineageOS-22-sapphire
+          path: ~/lineage/out/target/product/sapphire/*.zip
